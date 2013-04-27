@@ -64,6 +64,26 @@
 #define PN532_COMMAND_INSELECT              (0x54)
 #define PN532_COMMAND_INAUTOPOLL            (0x60)
 #define PN532_COMMAND_TGINITASTARGET        (0x8C)
+
+
+#define PN532_TARGET_MODE_PASSIVE_ONLY      (1<<0)
+#define PN532_TARGET_MODE_DEP_ONLY          (1<<1)
+#define PN532_TARGET_MODE_PICC_ONLY         (1<<2)
+
+
+// SEL_RES byte coding
+// Cascade bit set: NFCID1 not complete. 
+#define PN532_SEL_RES_CASCADE               (0x04)
+
+// NFCID1 complete, Target compliant with NFC transport
+//protocol. Request for Attributes supported.
+#define PN532_SEL_RES_ATTR                  (0x40)
+
+//NFCID1 complete, Target not compliant with transport 
+//protocol, Request for Attributes not supported. 
+#define PN532_SEL_RES_NO_ATTR               (0x00)
+#define PN532_SEL_RES_ISO                   (0x20)
+
 #define PN532_COMMAND_TGSETGENERALBYTES     (0x92)
 #define PN532_COMMAND_TGGETDATA             (0x86)
 #define PN532_COMMAND_TGSETDATA             (0x8E)
@@ -146,6 +166,7 @@ class Adafruit_PN532{
   boolean SAMConfig(void);
   uint32_t getFirmwareVersion(void);
   boolean sendCommandCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout = 1000);  
+  boolean sendCommandJustCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout = 1000);  
   boolean writeGPIO(uint8_t pinstate);
   uint8_t readGPIO(void);
   boolean setPassiveActivationRetries(uint8_t maxRetries);
@@ -168,6 +189,10 @@ class Adafruit_PN532{
   // Help functions to display formatted text
   static void PrintHex(const byte * data, const uint32_t numBytes);
   static void PrintHexChar(const byte * pbtData, const uint32_t numBytes);
+
+  bool initAsTarget();
+  bool setParameters(uint8_t flags);
+  bool waitUntilReady(uint16_t timeout);
 
  private:
   uint8_t _ss, _clk, _mosi, _miso;

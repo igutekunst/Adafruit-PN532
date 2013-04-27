@@ -51,7 +51,7 @@ byte pn532ack[] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00};
 byte pn532response_firmwarevers[] = {0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03};
 
 // Uncomment these lines to enable debug output for PN532(SPI) and/or MIFARE related code
-// #define PN532DEBUG
+#define PN532DEBUG
 // #define MIFAREDEBUG
 
 #define PN532_PACKBUFFSIZ 64
@@ -191,11 +191,32 @@ uint32_t Adafruit_PN532::getFirmwareVersion(void) {
 
   return response;
 }
+/***************************************************************/
+/*!
 
+
+
+
+*/
+/***************************************************************/
+
+bool Adafruit_PN532::waitUntilReady(uint16_t timeout){
+  uint16_t timer = 0;
+  while (readspistatus() != PN532_SPI_READY) {
+    if (timeout != 0) {
+      timer+=10;
+      if (timer > timeout)  
+        return false;
+    }
+    delay(10);
+  }
+}
 
 /**************************************************************************/
 /*! 
-    @brief  Sends a command and waits a specified period for the ACK
+    @brief  Sends a command and waits a specified period for the ACK,
+            Unlick sendCommandCheckAck, this one actually only checks for an ACK, but 
+            doesn't wait for the chip to be ready.
 
     @param  cmd       Pointer to the command buffer
     @param  cmdlen    The size of the command in bytes 
@@ -232,11 +253,43 @@ boolean Adafruit_PN532::sendCommandCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16
   while (readspistatus() != PN532_SPI_READY) {
     if (timeout != 0) {
       timer+=10;
+      if (timer > timeout)  {
+        #ifdef PN532DEBUG
+          Serial.println("SPI Timeout");
+        #endif
+      
+        return false;
+      }
+    }
+    delay(10);
+  }
+  
+  return true; // ack'd command
+}
+
+boolean Adafruit_PN532::sendCommandJustCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout) {
+  uint16_t timer = 0;
+  
+  // write the command
+  spiwritecommand(cmd, cmdlen);
+  
+  // Wait for chip to say its ready!
+  while (readspistatus() != PN532_SPI_READY) {
+    if (timeout != 0) {
+      timer+=10;
       if (timer > timeout)  
         return false;
     }
     delay(10);
   }
+  
+  // read acknowledgement
+  if (!spi_readack()) {
+    return false;
+  }
+  #ifdef PN532DEBUG
+    Serial.println("Got ACK");
+  #endif
   
   return true; // ack'd command
 }
@@ -1032,3 +1085,158 @@ uint8_t Adafruit_PN532::spiread(void) {
   }
   return x;
 }
+
+bool Adafruit_PN532::setParameters(uint8_t flags){
+  pn532_packetbuffer[0] = PN532_COMMAND_SETPARAMETERS;
+  pn532_packetbuffer[1] = flags;
+  if (!sendCommandCheckAck(pn532_packetbuffer, 2, 1000)) {
+      #ifdef PN532DEBUG
+        Serial.println("Could not set flags");
+      #endif
+    return false;
+  }
+
+  if (!waitUntilReady(1000) ){
+    #ifdef PN532DEBUG
+      Serial.println("Failed to get respponse from flag setup") ;
+    #endif
+    return false;
+  }
+
+  readspidata(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+  //check the first ten bytes for a start of frame, and check if return is 
+  // 0xD5 0x13
+  int i = 0;
+  for(i =0; i < 10; i++){
+    if (pn532_packetbuffer[i] == 0xD5){
+      if (pn532_packetbuffer[i+1] == 0x13)
+        return true;
+      
+    }
+  }
+  #ifdef PN532DEBUG
+    Serial.println("Invalid Response\n") ;
+  #endif
+  return false;
+}
+
+bool Adafruit_PN532::initAsTarget() {;
+  uint8_t flags = 0b00110100;
+  Serial.println("Setting up flags");
+  if (!setParameters(flags)){
+    Serial.println("Those flags are all fucked up yo");
+    return false;
+  }
+
+  Serial.println("Set up flags correctly");
+  //- TgInitAsTarget, to configure the PN532 as a target, 
+  // | Mode | MiFareParams | FeliCAParams | | NFCID3t
+  
+
+  //- TgGetData, to wait for data coming from the initiator, 
+
+  //- TgSetData, to respond to the initiator.  
+
+  uint8_t i;
+  pn532_packetbuffer[0] = PN532_COMMAND_TGINITASTARGET;
+  pn532_packetbuffer[1] = 0; //PN532_TARGET_MODE_PICC_ONLY;
+
+  
+
+  //MifareParams
+  //SENS_RES (2 bytes) LSB First
+  // NFCID1 size bit frame | zero | bit frame single device detection
+  pn532_packetbuffer[2] = 0x00;
+  // 0000 | Proprietary Encoding
+  pn532_packetbuffer[3] = 0x00;
+  //NFCID1t (3 bytes)
+  
+  pn532_packetbuffer[4] = 0x13;
+  pn532_packetbuffer[5] = 0x37;
+  pn532_packetbuffer[6] = 0x56;
+  //SEL_RES (1 byte)
+
+  // respond that we're ready, but don't support attr queries
+  pn532_packetbuffer[7] = PN532_SEL_RES_ATTR;
+
+  //FeliCaParams
+  
+  pn532_packetbuffer[8] =  0x01;
+  pn532_packetbuffer[9] =  0xFE;
+  pn532_packetbuffer[10] = 0xa2;
+  pn532_packetbuffer[11] = 0xa3;
+
+
+  pn532_packetbuffer[12] = 0xa4;
+  pn532_packetbuffer[13] = 0xa5;
+  pn532_packetbuffer[14] = 0xa6;
+  pn532_packetbuffer[15] = 0xa7;
+  // padding??
+  pn532_packetbuffer[16] = 0xc0;
+  pn532_packetbuffer[17] = 0xc1;
+  pn532_packetbuffer[18] = 0xc2;
+  pn532_packetbuffer[19] = 0xc3;
+
+  pn532_packetbuffer[20] = 0xc4;
+  pn532_packetbuffer[21] = 0xc5;
+  pn532_packetbuffer[22] = 0xc6;
+  pn532_packetbuffer[23] = 0xc7;
+  
+  //system code
+  pn532_packetbuffer[24] = 0xff;
+  pn532_packetbuffer[25] = 0xff;
+
+
+
+  // NFCID3t
+  pn532_packetbuffer[26] = 0xAA;
+  pn532_packetbuffer[27] = 0x99;
+  pn532_packetbuffer[28] = 0x88;
+  pn532_packetbuffer[29] = 0x77;
+  pn532_packetbuffer[30] = 0x66;
+  // Tk is zero bytes
+  pn532_packetbuffer[31] = 0x55;
+  pn532_packetbuffer[32] = 0x44;
+  pn532_packetbuffer[33] = 0x33;
+  pn532_packetbuffer[34] = 0x22;
+  pn532_packetbuffer[35] = 0x11;
+  // Len GT 
+  pn532_packetbuffer[36] = 0;
+  //GT is zero bytes long
+
+  // LEN Tk
+  pn532_packetbuffer[37] = 0;
+  // Tk is zero bytes
+  
+  #ifdef PN532DEBUG
+    Serial.println("About to initialize as Target...");
+  #endif
+
+  
+  if (!sendCommandJustCheckAck(pn532_packetbuffer,38,1000)) {
+    #ifdef PN532DEBUG
+      Serial.println("Could not initialize as target");
+    #endif
+    return false;
+  }
+  
+
+  Serial.println("Initialized as target maybe??");
+
+  Serial.println("Waiting to be probed...");
+
+  if (!waitUntilReady(10000) ){
+    #ifdef PN532DEBUG
+      Serial.println("Failed to get respponse from TgInitAsTarget") ;
+    #endif
+    return false;
+  }
+
+  readspidata(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+  Serial.println("Got someting");
+  PrintHex(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+
+  
+  return true;
+  
+  }
