@@ -1120,7 +1120,7 @@ bool Adafruit_PN532::setParameters(uint8_t flags){
   return false;
 }
 
-bool Adafruit_PN532::initAsTarget() {;
+bool Adafruit_PN532::initAsTarget() {
   uint8_t flags = 0b00110100;
   Serial.println("Setting up flags");
   if (!setParameters(flags)){
