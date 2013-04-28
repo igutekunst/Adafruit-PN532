@@ -192,7 +192,9 @@ class Adafruit_PN532{
   static void PrintHex(const byte * data, const uint32_t numBytes);
   static void PrintHexChar(const byte * pbtData, const uint32_t numBytes);
 
-  bool initAsTarget();
+  bool tgInitAsTarget();
+  bool tgGetData();
+  bool tgSetData(uint8_t *buffer, uint32_t bufferlen);
   bool setParameters(uint8_t flags);
   bool waitUntilReady(uint16_t timeout);
 
@@ -209,3 +211,4 @@ class Adafruit_PN532{
   void spiwrite(uint8_t c);
   uint8_t spiread(void);
 };
+

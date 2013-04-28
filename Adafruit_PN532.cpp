@@ -1150,7 +1150,12 @@ uint8_t Adafruit_PN532::spiread(void) {
   return x;
 }
 
-bool Adafruit_PN532::setParameters(uint8_t flags){
+/**************************************************************************/
+/*! 
+  Target library
+*/
+/**************************************************************************/
+bool Adafruit_PN532::setParameters(uint8_t flags) {
   pn532_packetbuffer[0] = PN532_COMMAND_SETPARAMETERS;
   pn532_packetbuffer[1] = flags;
   if (!sendCommandCheckAck(pn532_packetbuffer, 2, 1000)) {
@@ -1160,52 +1165,34 @@ bool Adafruit_PN532::setParameters(uint8_t flags){
     return false;
   }
 
-  if (!waitUntilReady(1000) ){
+  if (!waitUntilReady(1000)) {
     #ifdef PN532DEBUG
-      Serial.println("Failed to get respponse from flag setup") ;
+      Serial.println("Failed to get a response") ;
     #endif
     return false;
   }
 
   readspidata(pn532_packetbuffer, sizeof(pn532_packetbuffer));
-  //check the first ten bytes for a start of frame, and check if return is 
-  // 0xD5 0x13
-  int i = 0;
-  for(i =0; i < 10; i++){
-    if (pn532_packetbuffer[i] == 0xD5){
-      if (pn532_packetbuffer[i+1] == 0x13)
-        return true;
-      
-    }
-  }
-  #ifdef PN532DEBUG
-    Serial.println("Invalid Response\n") ;
-  #endif
-  return false;
-}
-
-bool Adafruit_PN532::initAsTarget() {
-  uint8_t flags = 0b00110100;
-  Serial.println("Setting up flags");
-  if (!setParameters(flags)){
-    Serial.println("Those flags are all fucked up yo");
+  if (!(pn532_packetbuffer[4] == 0xD5 && pn532_packetbuffer[5] == 0x13)) {
     return false;
   }
+  return true;
+}
 
-  Serial.println("Set up flags correctly");
+
+bool Adafruit_PN532::tgInitAsTarget() {
   //- TgInitAsTarget, to configure the PN532 as a target, 
   // | Mode | MiFareParams | FeliCAParams | | NFCID3t
   
-
-  //- TgGetData, to wait for data coming from the initiator, 
-
-  //- TgSetData, to respond to the initiator.  
+  uint8_t flags = 0b00110100;
+  if (!setParameters(flags)){
+    Serial.println("Error - check flags");
+    return false;
+  }
 
   uint8_t i;
   pn532_packetbuffer[0] = PN532_COMMAND_TGINITASTARGET;
-  pn532_packetbuffer[1] = 0; //PN532_TARGET_MODE_PICC_ONLY;
-
-  
+  pn532_packetbuffer[1] = PN532_TARGET_MODE_DEP_ONLY;
 
   //MifareParams
   //SENS_RES (2 bytes) LSB First
@@ -1214,28 +1201,25 @@ bool Adafruit_PN532::initAsTarget() {
   // 0000 | Proprietary Encoding
   pn532_packetbuffer[3] = 0x00;
   //NFCID1t (3 bytes)
-  
   pn532_packetbuffer[4] = 0x13;
   pn532_packetbuffer[5] = 0x37;
   pn532_packetbuffer[6] = 0x56;
   //SEL_RES (1 byte)
-
   // respond that we're ready, but don't support attr queries
   pn532_packetbuffer[7] = PN532_SEL_RES_ATTR;
 
   //FeliCaParams
-  
   pn532_packetbuffer[8] =  0x01;
   pn532_packetbuffer[9] =  0xFE;
   pn532_packetbuffer[10] = 0xa2;
   pn532_packetbuffer[11] = 0xa3;
 
-
   pn532_packetbuffer[12] = 0xa4;
   pn532_packetbuffer[13] = 0xa5;
   pn532_packetbuffer[14] = 0xa6;
   pn532_packetbuffer[15] = 0xa7;
-  // padding??
+
+  // padding
   pn532_packetbuffer[16] = 0xc0;
   pn532_packetbuffer[17] = 0xc1;
   pn532_packetbuffer[18] = 0xc2;
@@ -1250,57 +1234,113 @@ bool Adafruit_PN532::initAsTarget() {
   pn532_packetbuffer[24] = 0xff;
   pn532_packetbuffer[25] = 0xff;
 
-
-
   // NFCID3t
   pn532_packetbuffer[26] = 0xAA;
   pn532_packetbuffer[27] = 0x99;
   pn532_packetbuffer[28] = 0x88;
   pn532_packetbuffer[29] = 0x77;
   pn532_packetbuffer[30] = 0x66;
-  // Tk is zero bytes
   pn532_packetbuffer[31] = 0x55;
   pn532_packetbuffer[32] = 0x44;
   pn532_packetbuffer[33] = 0x33;
   pn532_packetbuffer[34] = 0x22;
   pn532_packetbuffer[35] = 0x11;
-  // Len GT 
-  pn532_packetbuffer[36] = 0;
-  //GT is zero bytes long
+  pn532_packetbuffer[35] = 0x00;
 
-  // LEN Tk
+  // Len Gt - 0 bytes
+  pn532_packetbuffer[36] = 0;
+
+  // LEN Tk - 0 bytes
   pn532_packetbuffer[37] = 0;
-  // Tk is zero bytes
   
   #ifdef PN532DEBUG
-    Serial.println("About to initialize as Target...");
+    Serial.println("About to initialize as a target...");
   #endif
-
   
-  if (!sendCommandJustCheckAck(pn532_packetbuffer,38,1000)) {
+  if (!sendCommandJustCheckAck(pn532_packetbuffer, 38, 1000)) {
     #ifdef PN532DEBUG
-      Serial.println("Could not initialize as target");
+      Serial.println("Could not initialize as a target");
     #endif
     return false;
   }
   
-
-  Serial.println("Initialized as target maybe??");
-
   Serial.println("Waiting to be probed...");
 
-  if (!waitUntilReady(10000) ){
+  if (!waitUntilReady(10000)) {
     #ifdef PN532DEBUG
-      Serial.println("Failed to get respponse from TgInitAsTarget") ;
+      Serial.println("Failed to get a response") ;
     #endif
     return false;
   }
 
   readspidata(pn532_packetbuffer, sizeof(pn532_packetbuffer));
-  Serial.println("Got someting");
-  PrintHex(pn532_packetbuffer, sizeof(pn532_packetbuffer));
-
-  
-  return true;
-  
+  if (!(pn532_packetbuffer[5] == 0xD5 && pn532_packetbuffer[6] == 0x8D)) {
+    return false;
   }
+  Serial.println("Initialized as a target");
+  return true;
+}
+
+bool Adafruit_PN532::tgGetData() {
+  //- TgGetData, to wait for data coming from the initiator, 
+  // | Status | DataIn[] |
+
+  uint8_t i;
+  pn532_packetbuffer[0] = PN532_COMMAND_TGGETDATA;
+
+  if (!sendCommandJustCheckAck(pn532_packetbuffer, 1, 1000)) {
+    #ifdef PN532DEBUG
+      Serial.println("Could not get data");
+    #endif
+    return false;
+  }
+
+  if (!waitUntilReady(10000)) {
+    #ifdef PN532DEBUG
+      Serial.println("Failed to get a response") ;
+    #endif
+    return false;
+  }
+
+  readspidata(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+  Serial.println("Got something in tgGetData");
+  if (!(pn532_packetbuffer[5] == 0xD5 && pn532_packetbuffer[6] == 0x87)) {
+    return false;
+  }
+  PrintHex(&pn532_packetbuffer[8], 10);
+  return true;
+}
+
+bool Adafruit_PN532::tgSetData(uint8_t *buffer, uint32_t bufferlen) {
+  //- TgSetData, to respond to the initiator.  
+  // | DataOut[] |
+
+  pn532_packetbuffer[0] = PN532_COMMAND_TGSETDATA;
+  
+  uint32_t i;
+  for (i = 0; i < bufferlen; i++) {
+    pn532_packetbuffer[i + 1] = buffer[i];
+  }
+
+  if (!sendCommandJustCheckAck(pn532_packetbuffer, bufferlen + 1, 1000)) {
+    #ifdef PN532DEBUG
+      Serial.println("Could not set data");
+    #endif
+    return false;
+  }
+
+  if (!waitUntilReady(10000)) {
+    #ifdef PN532DEBUG
+      Serial.println("Failed to get a response") ;
+    #endif
+    return false;
+  }
+
+  readspidata(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+  Serial.println("Got something in tgSetData");
+  if (!(pn532_packetbuffer[5] == 0xD5 && pn532_packetbuffer[6] == 0x8F)) {
+    return false;
+  }
+  PrintHex(&pn532_packetbuffer[8], 10);
+  return true;
+}
