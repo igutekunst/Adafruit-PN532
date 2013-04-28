@@ -182,6 +182,8 @@ class Adafruit_PN532{
   uint8_t mifareclassic_WriteDataBlock (uint8_t blockNumber, uint8_t * data);
   uint8_t mifareclassic_FormatNDEF (void);
   uint8_t mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriIdentifier, const char * url);
+  bool inJumpForDEP(bool active, uint8_t cardbaudrate, uint8_t * uid);
+  bool inDataExchange(uint8_t card_id, char * buffer, uint8_t size);
   
   // Mifare Ultralight functions
   uint8_t mifareultralight_ReadPage (uint8_t page, uint8_t * buffer);

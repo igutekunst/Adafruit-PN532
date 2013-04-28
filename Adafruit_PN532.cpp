@@ -51,7 +51,7 @@ byte pn532ack[] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00};
 byte pn532response_firmwarevers[] = {0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03};
 
 // Uncomment these lines to enable debug output for PN532(SPI) and/or MIFARE related code
-#define PN532DEBUG
+//#define PN532DEBUG
 // #define MIFAREDEBUG
 
 #define PN532_PACKBUFFSIZ 64
@@ -452,6 +452,43 @@ boolean Adafruit_PN532::setPassiveActivationRetries(uint8_t maxRetries) {
   return 1;
 }
 
+bool Adafruit_PN532::inJumpForDEP(bool active, uint8_t cardbaudrate, uint8_t * uid) {
+
+  if (!active) {
+    Serial.println("inJumpForDEP does not support passive mode currently") ;
+    return false; 
+  }
+  
+  pn532_packetbuffer[0] = PN532_COMMAND_INJUMPFORDEP;
+  pn532_packetbuffer[1] = (uint8_t) active;
+  pn532_packetbuffer[2] = cardbaudrate;
+  pn532_packetbuffer[3] = 0;
+
+  
+  if (!sendCommandCheckAck(pn532_packetbuffer, 4, 1000)) {
+    #ifdef PN532DEBUG
+      Serial.println("Failed to inJumpForDep");
+      return false;
+    #endif
+  }
+
+  readspidata(pn532_packetbuffer, 20);
+
+  if (!(pn532_packetbuffer[5] == 0xD5 &&
+        pn532_packetbuffer[6] == 0x57 &&
+        pn532_packetbuffer[7] == 0x00)) {
+    #ifdef PN532_DEBUG
+      Serial.println("inJumpForDEP failed");
+    #endif
+    return false;
+  }
+
+  memcpy(uid, &pn532_packetbuffer[9], 10);
+
+  return true;
+
+}
+
 /***** ISO14443A Commands ******/
 
 /**************************************************************************/
@@ -555,6 +592,33 @@ bool Adafruit_PN532::mifareclassic_IsTrailerBlock (uint32_t uiBlock)
   else
     return ((uiBlock + 1) % 16 == 0);
 }
+/*
+ * Performs a data exchange with a target.
+ * Buffer needs special formatting when talking 
+ * To an ISO 14443 card
+ *
+ */
+
+bool Adafruit_PN532::inDataExchange(uint8_t card_id, char * buffer, uint8_t size) {
+  memmove(&pn532_packetbuffer[2], buffer, size); // move data into buffer. assume buffer could be the same
+  pn532_packetbuffer[0] = PN532_COMMAND_INDATAEXCHANGE;   /* Data Exchange Header */
+  pn532_packetbuffer[1] = 1;                              /* Card ID */
+
+  if (!sendCommandCheckAck(pn532_packetbuffer, size + 2)) {
+    #ifdef PN532DEBUG
+    Serial.println("inDataExchangeFailed");
+    #endif
+  }
+
+  readspidata((uint8_t *) pn532_packetbuffer, 32);
+  if (!(pn532_packetbuffer[5] == 0xD5 && 
+        pn532_packetbuffer[6] == 0x41 &&
+        pn532_packetbuffer[7] == 0x00)) {
+    return false;
+  }
+  memmove((uint8_t * ) buffer, &pn532_packetbuffer[8], size);
+  return true;
+}
 
 /**************************************************************************/
 /*! 
@@ -588,7 +652,7 @@ uint8_t Adafruit_PN532::mifareclassic_AuthenticateBlock (uint8_t * uid, uint8_t 
   #ifdef MIFAREDEBUG
   Serial.print("Trying to authenticate card ");
   Adafruit_PN532::PrintHex(_uid, _uidLen);
-  Serial.print("Using authentication KEY ");Serial.print(keyNumber ? 'B' : 'A');Serial.print(": ");
+  Serial.print("Using authentication KEY "); Serial.print(keyNumber ? 'B' : 'A');Serial.print(": ");
   Adafruit_PN532::PrintHex(_key, 6);
   #endif
   
