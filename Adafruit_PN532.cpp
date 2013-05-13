@@ -1281,7 +1281,7 @@ bool Adafruit_PN532::tgInitAsTarget() {
   return true;
 }
 
-bool Adafruit_PN532::tgGetData() {
+bool Adafruit_PN532::tgGetData(char *reply) {
   //- TgGetData, to wait for data coming from the initiator, 
   // | Status | DataIn[] |
 
@@ -1307,7 +1307,7 @@ bool Adafruit_PN532::tgGetData() {
   if (!(pn532_packetbuffer[5] == 0xD5 && pn532_packetbuffer[6] == 0x87)) {
     return false;
   }
-  PrintHex(&pn532_packetbuffer[8], 10);
+  memmove(reply, &pn532_packetbuffer[8], 32);
   return true;
 }
 
@@ -1341,6 +1341,5 @@ bool Adafruit_PN532::tgSetData(uint8_t *buffer, uint32_t bufferlen) {
   if (!(pn532_packetbuffer[5] == 0xD5 && pn532_packetbuffer[6] == 0x8F)) {
     return false;
   }
-  PrintHex(&pn532_packetbuffer[8], 10);
   return true;
 }

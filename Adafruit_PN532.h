@@ -193,7 +193,7 @@ class Adafruit_PN532{
   static void PrintHexChar(const byte * pbtData, const uint32_t numBytes);
 
   bool tgInitAsTarget();
-  bool tgGetData();
+  bool tgGetData(char *reply);
   bool tgSetData(uint8_t *buffer, uint32_t bufferlen);
   bool setParameters(uint8_t flags);
   bool waitUntilReady(uint16_t timeout);
